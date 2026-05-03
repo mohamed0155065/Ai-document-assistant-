@@ -1,3 +1,4 @@
+'use client'
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -24,7 +25,7 @@ export default function LoginForm() {
         if (error) {
             setError(error.message);
         } else {
-            router.push("/dashboard");
+            router.push("/auth/dashboard");
             router.refresh();
         }
 

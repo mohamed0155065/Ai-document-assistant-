@@ -4,9 +4,13 @@ type ProjectDocument = {
 };
 
 export function createProjectContext(documents: ProjectDocument[]) {
-    const combined = documents
+    const filteredDocs = documents.filter(
+        (doc) => doc.extracted_text && doc.extracted_text.trim().length > 0
+    );
+
+    const combined = filteredDocs
         .map((doc, index) => {
-            return `Document ${index + 1}: ${doc.file_name}\n${doc.extracted_text || ""}`;
+            return `Document ${index + 1}: ${doc.file_name}\n${doc.extracted_text}`;
         })
         .join("\n\n----------------------\n\n");
 

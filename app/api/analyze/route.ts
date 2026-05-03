@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { openai } from "@/lib/openai";
-import { buildProjectContext } from "@/lib/build-project-context";
+import { askAI } from "@/lib/ai";
+import { createProjectContext } from "@/lib/createProjectContext";
 
 export async function POST(req: Request) {
     try {
@@ -13,12 +13,23 @@ export async function POST(req: Request) {
         } = await supabase.auth.getUser();
 
         if (userError || !user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+            return NextResponse.json(
+                { error: "Unauthorized" },
+                { status: 401 }
+            );
         }
 
-        const { projectId, prompt } = await req.json();
+        const body = await req.json().catch(() => null);
 
-        if (!projectId || !prompt?.trim()) {
+        const projectId = body?.projectId;
+        const prompt = body?.prompt;
+
+        if (
+            typeof projectId !== "string" ||
+            typeof prompt !== "string" ||
+            !projectId.trim() ||
+            !prompt.trim()
+        ) {
             return NextResponse.json(
                 { error: "projectId and prompt are required" },
                 { status: 400 }
@@ -33,7 +44,10 @@ export async function POST(req: Request) {
             .single();
 
         if (projectError || !project) {
-            return NextResponse.json({ error: "Project not found" }, { status: 404 });
+            return NextResponse.json(
+                { error: "Project not found" },
+                { status: 404 }
+            );
         }
 
         const { data: documents, error: docsError } = await supabase
@@ -43,7 +57,10 @@ export async function POST(req: Request) {
             .eq("user_id", user.id);
 
         if (docsError) {
-            return NextResponse.json({ error: docsError.message }, { status: 500 });
+            return NextResponse.json(
+                { error: docsError.message },
+                { status: 500 }
+            );
         }
 
         if (!documents || documents.length === 0) {
@@ -53,49 +70,39 @@ export async function POST(req: Request) {
             );
         }
 
-        const projectContext = buildProjectContext(documents);
+        const projectContext = createProjectContext(documents);
 
         const finalPrompt = `
 You are an expert AI document analyst.
 
-The user uploaded multiple documents inside one project.
-Use only the provided project documents to answer.
+Use ONLY the provided documents to answer.
 
-User Prompt:
+User Question:
 ${prompt}
 
-Project Documents:
+Documents:
 ${projectContext}
 `;
 
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
-                {
-                    role: "system",
-                    content:
-                        "You analyze multiple uploaded documents and answer only based on the provided content.",
-                },
-                {
-                    role: "user",
-                    content: finalPrompt,
-                },
-            ],
-        });
+        // 🔥 AI CALL
+        const aiResponse = await askAI(finalPrompt);
 
         const response =
-            completion.choices[0]?.message?.content || "No response generated.";
+            typeof aiResponse === "string"
+                ? aiResponse.trim()
+                : "No response generated";
 
-        const { data: generation, error: generationError } = await supabase
-            .from("generations")
-            .insert({
-                user_id: user.id,
-                project_id: projectId,
-                prompt,
-                response,
-            })
-            .select()
-            .single();
+        const { data: generation, error: generationError } =
+            await supabase
+                .from("generations")
+                .insert({
+                    user_id: user.id,
+                    project_id: projectId,
+                    prompt: prompt.trim(),
+                    response,
+                })
+                .select()
+                .single();
 
         if (generationError) {
             return NextResponse.json(
@@ -106,9 +113,14 @@ ${projectContext}
 
         return NextResponse.json({ generation });
     } catch (error) {
+        console.error("ANALYSIS ERROR:", error);
+
         return NextResponse.json(
             {
-                error: error instanceof Error ? error.message : "Analysis failed",
+                error:
+                    error instanceof Error
+                        ? error.message
+                        : "Analysis failed",
             },
             { status: 500 }
         );

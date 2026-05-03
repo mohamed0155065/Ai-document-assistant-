@@ -20,30 +20,38 @@ export default async function ProjectDetailsPage({
         redirect("/auth/login");
     }
 
-    const { data: project } = await supabase
+    const { data: project, error: projectError } = await supabase
         .from("projects")
         .select("*")
         .eq("id", id)
         .eq("user_id", user.id)
         .single();
 
-    if (!project) {
-        redirect("/dashboard");
+    if (projectError || !project) {
+        redirect("/auth/dashboard");
     }
 
-    const { data: documents } = await supabase
+    const { data: documents, error: docsError } = await supabase
         .from("documents")
         .select("*")
         .eq("project_id", id)
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
-    const { data: generations } = await supabase
+    const { data: generations, error: generationsError } = await supabase
         .from("generations")
         .select("*")
         .eq("project_id", id)
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
+
+    if (docsError) {
+        console.error(docsError.message);
+    }
+
+    if (generationsError) {
+        console.error(generationsError.message);
+    }
 
     return (
         <main className="min-h-screen bg-zinc-950 text-white p-8">
@@ -59,16 +67,23 @@ export default async function ProjectDetailsPage({
 
                 <section className="space-y-4">
                     <h2 className="text-xl font-semibold">Project Files</h2>
+
                     <div className="grid gap-4">
-                        {documents?.map((doc) => (
-                            <div
-                                key={doc.id}
-                                className="rounded-xl border border-zinc-800 bg-zinc-900 p-4"
-                            >
-                                <p className="font-medium">{doc.file_name}</p>
-                                <p className="text-sm text-zinc-400">{doc.file_type}</p>
+                        {documents && documents.length > 0 ? (
+                            documents.map((doc) => (
+                                <div
+                                    key={doc.id}
+                                    className="rounded-xl border border-zinc-800 bg-zinc-900 p-4"
+                                >
+                                    <p className="font-medium">{doc.file_name}</p>
+                                    <p className="text-sm text-zinc-400">{doc.file_type}</p>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-zinc-400">
+                                No files uploaded yet.
                             </div>
-                        ))}
+                        )}
                     </div>
                 </section>
 
@@ -76,21 +91,28 @@ export default async function ProjectDetailsPage({
 
                 <section className="space-y-4">
                     <h2 className="text-xl font-semibold">Previous Analyses</h2>
-                    <div className="space-y-4">
-                        {generations?.map((gen) => (
-                            <div
-                                key={gen.id}
-                                className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5"
-                            >
-                                <p className="text-sm text-zinc-400 mb-2">Prompt</p>
-                                <p className="mb-4 whitespace-pre-wrap">{gen.prompt}</p>
 
-                                <p className="text-sm text-zinc-400 mb-2">Response</p>
-                                <div className="whitespace-pre-wrap text-zinc-200">
-                                    {gen.response}
+                    <div className="space-y-4">
+                        {generations && generations.length > 0 ? (
+                            generations.map((gen) => (
+                                <div
+                                    key={gen.id}
+                                    className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5"
+                                >
+                                    <p className="text-sm text-zinc-400 mb-2">Prompt</p>
+                                    <p className="mb-4 whitespace-pre-wrap">{gen.prompt}</p>
+
+                                    <p className="text-sm text-zinc-400 mb-2">Response</p>
+                                    <div className="whitespace-pre-wrap text-zinc-200">
+                                        {gen.response}
+                                    </div>
                                 </div>
+                            ))
+                        ) : (
+                            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-zinc-400">
+                                No analyses yet.
                             </div>
-                        ))}
+                        )}
                     </div>
                 </section>
             </div>

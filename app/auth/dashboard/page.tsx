@@ -7,23 +7,28 @@ import ProjectPromptBox from "@/components/ai/project-prompt-box";
 import GenerationsList from "@/components/ai/generations";
 import Generations from "@/components/ai/generations";
 
+// Server component — all data is fetched before the page renders
 export default async function DashboardPage({
     searchParams,
 }: {
     searchParams: Promise<{ project?: string }>;
 }) {
+    // Read the selected project ID from the URL query string (?project=...)
     const { project: selectedProjectIdFromUrl } = await searchParams;
 
     const supabase = await createClient();
 
+    // Verify the user is logged in
     const {
         data: { user },
     } = await supabase.auth.getUser();
 
+    // Not logged in — redirect to login
     if (!user) {
         redirect("/auth/login");
     }
 
+    // Fetch all projects belonging to this user, newest first
     const { data: projects, error: projectsError } = await supabase
         .from("projects")
         .select("*")
@@ -34,6 +39,10 @@ export default async function DashboardPage({
         console.error(projectsError.message);
     }
 
+    // Determine which project to show:
+    // 1. The one from the URL if it exists in the user's projects
+    // 2. Otherwise fall back to the most recent project
+    // 3. Otherwise null (empty state)
     const selectedProject =
         projects?.find((p) => p.id === selectedProjectIdFromUrl) ||
         projects?.[0] ||
@@ -42,6 +51,7 @@ export default async function DashboardPage({
     let documents: any[] = [];
     let generations: any[] = [];
 
+    // Only fetch documents and generations if a project is selected
     if (selectedProject) {
         const { data: docs, error: docsError } = await supabase
             .from("documents")
@@ -57,6 +67,7 @@ export default async function DashboardPage({
             .eq("user_id", user.id)
             .order("created_at", { ascending: false });
 
+        // Log errors but don't crash — UI handles empty states
         if (docsError) console.error(docsError.message);
         if (gensError) console.error(gensError.message);
 
@@ -64,12 +75,14 @@ export default async function DashboardPage({
         generations = gens || [];
     }
 
+    // Map file MIME types to a readable icon
     const getFileIcon = (type: string) => {
         if (type === "application/pdf") return "📄";
         if (type === "text/plain") return "📝";
         return "📃";
     };
 
+    // Format ISO date strings into a readable format like "Jan 5, 2025"
     const formatDate = (date: string) =>
         new Date(date).toLocaleDateString("en-US", {
             month: "short",
@@ -81,12 +94,12 @@ export default async function DashboardPage({
         <main className="min-h-screen bg-black text-white">
             <div className="flex flex-col lg:flex-row min-h-screen">
 
-                {/* Sidebar */}
+                {/* Sidebar — sticky on desktop, stacked on mobile */}
                 <aside className="w-full lg:w-80 xl:w-96 shrink-0 border-b lg:border-b-0
                     lg:border-r border-zinc-800 bg-zinc-950 p-4 sm:p-5
                     space-y-6 lg:min-h-screen lg:sticky lg:top-0 lg:overflow-y-auto">
 
-                    {/* Logo / Title */}
+                    {/* Dashboard title and description */}
                     <div className="space-y-1">
                         <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
                             AI Dashboard
@@ -96,15 +109,16 @@ export default async function DashboardPage({
                         </p>
                     </div>
 
-                    {/* Create Project */}
+                    {/* Form to create a new project */}
                     <CreateProjectForm />
 
-                    {/* Projects List */}
+                    {/* List of all user projects */}
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
                             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
                                 Projects
                             </h2>
+                            {/* Project count badge */}
                             {projects && (
                                 <span className="text-xs text-zinc-600 bg-zinc-800 px-2 py-0.5 rounded-full">
                                     {projects.length}
@@ -117,6 +131,7 @@ export default async function DashboardPage({
                                 projects.map((project) => {
                                     const active = selectedProject?.id === project.id;
                                     return (
+                                        // Each project is a link that updates the URL query param
                                         <Link
                                             key={project.id}
                                             href={`/auth/dashboard?project=${project.id}`}
@@ -127,6 +142,7 @@ export default async function DashboardPage({
                                                 }`}
                                         >
                                             <div className="flex items-center gap-2">
+                                                {/* Active indicator dot */}
                                                 {active && (
                                                     <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />
                                                 )}
@@ -143,6 +159,7 @@ export default async function DashboardPage({
                                     );
                                 })
                             ) : (
+                                // Empty state — user has no projects yet
                                 <div className="rounded-xl border border-dashed border-zinc-800
                                     p-4 text-center text-zinc-500 text-sm">
                                     No projects yet.
@@ -152,12 +169,12 @@ export default async function DashboardPage({
                     </div>
                 </aside>
 
-                {/* Main Content */}
+                {/* Main content area */}
                 <section className="flex-1 bg-zinc-950 p-4 sm:p-6 lg:p-8 overflow-y-auto">
                     {!selectedProject ? (
+                        // Empty state — no project selected or created yet
                         <div className="max-w-2xl mx-auto h-full flex flex-col
                             items-center justify-center py-24 text-center space-y-4">
-
                             <h2 className="text-2xl sm:text-3xl font-bold">
                                 Start your first project
                             </h2>
@@ -169,7 +186,7 @@ export default async function DashboardPage({
                     ) : (
                         <div className="max-w-4xl mx-auto space-y-6 sm:space-y-8">
 
-                            {/* Project Header */}
+                            {/* Project header — title, description, and quick stats */}
                             <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 sm:p-6">
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="min-w-0">
@@ -182,12 +199,13 @@ export default async function DashboardPage({
                                             </p>
                                         )}
                                     </div>
+                                    {/* Creation date — hidden on mobile to save space */}
                                     <div className="shrink-0 text-xs text-zinc-600 mt-1 hidden sm:block">
                                         {formatDate(selectedProject.created_at)}
                                     </div>
                                 </div>
 
-                                {/* Stats */}
+                                {/* Quick stats — file count and analysis count */}
                                 <div className="flex gap-6 mt-4 pt-4 border-t border-zinc-800">
                                     <div className="text-center">
                                         <p className="text-lg font-bold text-white">
@@ -205,16 +223,16 @@ export default async function DashboardPage({
                                 </div>
                             </div>
 
-                            {/* Upload Box */}
+                            {/* File upload area */}
                             <UploadBox projectId={selectedProject.id} />
 
-                            {/* AI Prompt Box */}
+                            {/* AI prompt input */}
                             <ProjectPromptBox projectId={selectedProject.id} />
 
-                            {/* Uploaded Files */}
+                            {/* Grid of uploaded files */}
                             <section className="space-y-4">
                                 <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
-                                    📎 Uploaded Files
+                                    Uploaded Files
                                     <span className="text-xs font-normal text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded-full">
                                         {documents.length}
                                     </span>
@@ -229,6 +247,7 @@ export default async function DashboardPage({
                                                     border border-zinc-800 bg-zinc-900 p-4
                                                     hover:border-zinc-700 transition-colors"
                                             >
+                                                {/* Icon based on file type */}
                                                 <span className="text-2xl shrink-0">
                                                     {getFileIcon(doc.file_type)}
                                                 </span>
@@ -244,6 +263,7 @@ export default async function DashboardPage({
                                         ))}
                                     </div>
                                 ) : (
+                                    // Empty state — no files uploaded to this project yet
                                     <div className="rounded-xl border border-dashed border-zinc-800
                                         p-6 text-center text-zinc-500 text-sm">
                                         No files uploaded yet. Upload a file to get started.
@@ -251,7 +271,7 @@ export default async function DashboardPage({
                                 )}
                             </section>
 
-                            {/* Generations List */}
+                            {/* List of all previous AI analyses for this project */}
                             <Generations generations={generations} />
 
                         </div>

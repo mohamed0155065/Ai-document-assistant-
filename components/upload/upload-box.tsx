@@ -5,12 +5,18 @@ import { useRef, useState } from "react";
 
 export default function UploadBox({ projectId }: { projectId: string }) {
   const router = useRouter();
+
+  // Ref to the hidden file input so we can trigger it from the drop zone click
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+
+  // Tracks whether the message is a success or error to apply the right styles
   const [messageType, setMessageType] = useState<"success" | "error" | "">("");
+
+  // Tracks whether the user is dragging a file over the drop zone
   const [isDragging, setIsDragging] = useState(false);
 
   const handleUpload = async () => {
@@ -25,15 +31,18 @@ export default function UploadBox({ projectId }: { projectId: string }) {
       setMessage("");
       setMessageType("");
 
+      // Build a FormData payload — multipart so we can send multiple files
       const formData = new FormData();
       formData.append("projectId", projectId);
       files.forEach((file) => formData.append("files", file));
 
+      // Send to the upload API endpoint
       const res = await fetch("/api/upload", {
         method: "POST",
         body: formData,
       });
 
+      // Safely parse the response — fall back to empty object if it fails
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
@@ -42,12 +51,14 @@ export default function UploadBox({ projectId }: { projectId: string }) {
         return;
       }
 
-      setMessage(`✅ ${data.documents.length} file(s) uploaded successfully!`);
+      setMessage(`${data.documents.length} file(s) uploaded successfully!`);
       setMessageType("success");
-      setFiles([]);
 
+      // Clear the selected files and reset the hidden input
+      setFiles([]);
       if (inputRef.current) inputRef.current.value = "";
 
+      // Refresh server data so the files list updates without a full page reload
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Upload failed.");
@@ -60,6 +71,8 @@ export default function UploadBox({ projectId }: { projectId: string }) {
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(false);
+
+    // Filter dropped files to only allow supported types
     const dropped = Array.from(e.dataTransfer.files).filter((f) =>
       [
         "application/pdf",
@@ -67,24 +80,28 @@ export default function UploadBox({ projectId }: { projectId: string }) {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       ].includes(f.type)
     );
+
     if (dropped.length) {
       setFiles(dropped);
       setMessage("");
       setMessageType("");
     } else {
+      // All dropped files were unsupported types
       setMessage("Only PDF, TXT, and DOCX files are allowed.");
       setMessageType("error");
     }
   };
 
+  // Remove a single file from the selected list by index
   const removeFile = (index: number) => {
     setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Map MIME types to a readable icon
   const getFileIcon = (type: string) => {
-    if (type === "application/pdf") return "📄";
-    if (type === "text/plain") return "📝";
-    return "📃";
+    if (type === "application/pdf") return "PDF";
+    if (type === "text/plain") return "TXT";
+    return "DOC";
   };
 
   return (
@@ -100,7 +117,7 @@ export default function UploadBox({ projectId }: { projectId: string }) {
         </p>
       </div>
 
-      {/* Drop Zone */}
+      {/* Drop zone — clicking it triggers the hidden file input */}
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -121,6 +138,8 @@ export default function UploadBox({ projectId }: { projectId: string }) {
           Drag & drop files here, or{" "}
           <span className="text-white underline">browse</span>
         </p>
+
+        {/* Hidden input — triggered by clicking the drop zone */}
         <input
           ref={inputRef}
           type="file"
@@ -135,7 +154,7 @@ export default function UploadBox({ projectId }: { projectId: string }) {
         />
       </div>
 
-      {/* Selected Files */}
+      {/* List of selected files with individual remove buttons */}
       {files.length > 0 && (
         <div className="space-y-2">
           <p className="text-xs sm:text-sm text-zinc-400 font-medium">
@@ -151,10 +170,12 @@ export default function UploadBox({ projectId }: { projectId: string }) {
                 <div className="flex items-center gap-2 text-zinc-300 min-w-0">
                   <span className="shrink-0">{getFileIcon(file.type)}</span>
                   <span className="truncate">{file.name}</span>
+                  {/* File size — hidden on mobile to save space */}
                   <span className="text-zinc-500 shrink-0 hidden sm:inline">
                     ({(file.size / 1024).toFixed(1)} KB)
                   </span>
                 </div>
+                {/* Remove this file from the selection */}
                 <button
                   onClick={() => removeFile(index)}
                   className="shrink-0 text-zinc-500 hover:text-red-400 
@@ -168,7 +189,7 @@ export default function UploadBox({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {/* Upload Button */}
+      {/* Upload button — disabled while loading or no files are selected */}
       <button
         type="button"
         onClick={handleUpload}
@@ -177,6 +198,7 @@ export default function UploadBox({ projectId }: { projectId: string }) {
           text-sm sm:text-base font-medium transition-opacity duration-200 
           disabled:opacity-40 hover:opacity-90"
       >
+        {/* Show a spinner while the upload is in progress */}
         {loading ? (
           <span className="flex items-center justify-center gap-2">
             <svg
@@ -205,12 +227,12 @@ export default function UploadBox({ projectId }: { projectId: string }) {
         )}
       </button>
 
-      {/* Message */}
+      {/* Success or error message — styled differently based on messageType */}
       {message && (
         <p
           className={`text-xs sm:text-sm rounded-lg px-4 py-2 ${messageType === "success"
-              ? "bg-green-900/30 text-green-400 border border-green-800"
-              : "bg-red-900/30 text-red-400 border border-red-800"
+            ? "bg-green-900/30 text-green-400 border border-green-800"
+            : "bg-red-900/30 text-red-400 border border-red-800"
             }`}
         >
           {message}

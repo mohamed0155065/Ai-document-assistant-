@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginForm() {
+    // Client-side Supabase instance for browser auth
     const supabase = createClient();
     const router = useRouter();
 
@@ -13,18 +14,23 @@ export default function LoginForm() {
     const [error, setError] = useState("");
 
     const handleLogin = async (e: React.FormEvent) => {
+        // Prevent the form from doing a native browser submit
         e.preventDefault();
         setLoading(true);
         setError("");
 
+        // Attempt to sign in with email and password via Supabase Auth
         const { error } = await supabase.auth.signInWithPassword({
             email,
             password,
         });
 
         if (error) {
+            // Show the error from Supabase directly — wrong password, unconfirmed email, etc.
             setError(error.message);
         } else {
+            // Login succeeded — go to the dashboard
+            // router.refresh() syncs the server session so protected pages don't redirect back
             router.push("/auth/dashboard");
             router.refresh();
         }
@@ -39,7 +45,7 @@ export default function LoginForm() {
         >
             <h1 className="text-2xl font-bold">Welcome back</h1>
 
-            {/* Email */}
+            {/* Email input */}
             <input
                 type="email"
                 className="w-full rounded-lg bg-zinc-800 px-4 py-3 outline-none"
@@ -48,7 +54,7 @@ export default function LoginForm() {
                 onChange={(e) => setEmail(e.target.value)}
             />
 
-            {/* Password */}
+            {/* Password input */}
             <input
                 type="password"
                 className="w-full rounded-lg bg-zinc-800 px-4 py-3 outline-none"
@@ -57,7 +63,7 @@ export default function LoginForm() {
                 onChange={(e) => setPassword(e.target.value)}
             />
 
-            {/* Button */}
+            {/* Submit button — disabled while the request is in flight */}
             <button
                 disabled={loading}
                 className="w-full rounded-lg bg-white text-black py-3 font-medium"
@@ -65,7 +71,7 @@ export default function LoginForm() {
                 {loading ? "Signing in..." : "Login"}
             </button>
 
-            {/* Error */}
+            {/* Error message from Supabase — wrong credentials, unverified email, etc. */}
             {error && <p className="text-sm text-red-400">{error}</p>}
         </form>
     );

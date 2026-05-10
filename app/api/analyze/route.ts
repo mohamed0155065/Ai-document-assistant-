@@ -5,13 +5,16 @@ import { createProjectContext } from "@/lib/createProjectContext";
 
 export async function POST(req: Request) {
     try {
+        // Initialize Supabase client to interact with the database
         const supabase = await createClient();
 
+        // Verify the user's identity through their session
         const {
             data: { user },
             error: userError,
         } = await supabase.auth.getUser();
 
+        // If no user or auth error → return 401 immediately, no further processing
         if (userError || !user) {
             return NextResponse.json(
                 { error: "Unauthorized" },
@@ -19,11 +22,13 @@ export async function POST(req: Request) {
             );
         }
 
+        // Safely parse the request body — returns null instead of throwing if malformed
         const body = await req.json().catch(() => null);
 
         const projectId = body?.projectId;
         const prompt = body?.prompt;
 
+        // Validate that both projectId and prompt exist and are non-empty strings
         if (
             typeof projectId !== "string" ||
             typeof prompt !== "string" ||
@@ -36,11 +41,12 @@ export async function POST(req: Request) {
             );
         }
 
+        // Verify the project actually belongs to this user (authorization, not just authentication)
         const { data: project, error: projectError } = await supabase
             .from("projects")
             .select("id")
             .eq("id", projectId)
-            .eq("user_id", user.id)
+            .eq("user_id", user.id) // ownership check at the DB level, no data leaks
             .single();
 
         if (projectError || !project) {
@@ -50,6 +56,7 @@ export async function POST(req: Request) {
             );
         }
 
+        // Fetch all documents linked to this project
         const { data: documents, error: docsError } = await supabase
             .from("documents")
             .select("file_name, extracted_text")
@@ -63,6 +70,7 @@ export async function POST(req: Request) {
             );
         }
 
+        // No documents found — nothing to analyze, stop early
         if (!documents || documents.length === 0) {
             return NextResponse.json(
                 { error: "No documents found in this project" },
@@ -70,8 +78,10 @@ export async function POST(req: Request) {
             );
         }
 
+        // Transform documents into a structured text context for the AI
         const projectContext = createProjectContext(documents);
 
+        // Build the final prompt — AI is strictly constrained to the provided documents only
         const finalPrompt = `
 You are an expert AI document analyst.
 
@@ -84,14 +94,16 @@ Documents:
 ${projectContext}
 `;
 
-        // 🔥 AI CALL
+        //  Call the AI with the fully constructed prompt
         const aiResponse = await askAI(finalPrompt);
 
+        // If response isn't a string, fall back to a safe default instead of crashing
         const response =
             typeof aiResponse === "string"
                 ? aiResponse.trim()
                 : "No response generated";
 
+        // Persist the generation to the database for history and auditing
         const { data: generation, error: generationError } =
             await supabase
                 .from("generations")
@@ -111,8 +123,10 @@ ${projectContext}
             );
         }
 
+        // Everything went well → return the saved generation to the client
         return NextResponse.json({ generation });
     } catch (error) {
+        // Global catch — handles any unexpected runtime errors gracefully
         console.error("ANALYSIS ERROR:", error);
 
         return NextResponse.json(

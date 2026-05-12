@@ -31,8 +31,8 @@ export default function LoginForm() {
         } else {
             // Login succeeded — go to the dashboard
             // router.refresh() syncs the server session so protected pages don't redirect back
-            router.push("/auth/dashboard");
             router.refresh();
+            router.push("/auth/dashboard");
         }
 
         setLoading(false);

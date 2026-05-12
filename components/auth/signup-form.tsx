@@ -32,7 +32,7 @@ export default function SignupForm() {
             setMessage('Account created successfully')
 
             // Account created — send them to login to sign in
-            router.push("/login")
+            router.push("/auth/dashboard")
         }
 
         setLoading(false)

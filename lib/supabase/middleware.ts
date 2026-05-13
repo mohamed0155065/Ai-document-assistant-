@@ -16,7 +16,7 @@ export async function updateSession(request: NextRequest) {
                     cookiesToSet.forEach(({ name, value }) =>
                         request.cookies.set(name, value)
                     );
-                    supabaseResponse = NextResponse.next({ request });
+                    // ✅ مش بنعمل NextResponse.next جديد هنا
                     cookiesToSet.forEach(({ name, value, options }) =>
                         supabaseResponse.cookies.set(name, value, options)
                     );
@@ -27,9 +27,20 @@ export async function updateSession(request: NextRequest) {
 
     const { data: { user } } = await supabase.auth.getUser();
 
-    if (!user && !request.nextUrl.pathname.startsWith("/auth")) {
+    // لو مش logged in وبيحاول يدخل dashboard
+    if (!user && request.nextUrl.pathname.startsWith("/auth/dashboard")) {
         const url = request.nextUrl.clone();
         url.pathname = "/auth/login";
+        return NextResponse.redirect(url);
+    }
+
+    // لو logged in وبيحاول يدخل login أو signup
+    if (user && (
+        request.nextUrl.pathname === "/auth/login" ||
+        request.nextUrl.pathname === "/auth/signup"
+    )) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/auth/dashboard";
         return NextResponse.redirect(url);
     }
 
